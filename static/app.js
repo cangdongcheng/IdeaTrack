@@ -196,7 +196,7 @@ function renderNode(node) {
   tcontent.setAttribute('x', 0);
   tcontent.setAttribute('y', 7);
   tcontent.setAttribute('text-anchor', 'middle');
-  tcontent.textContent = clip(node.content);
+  tcontent.textContent = node.label ? clip(node.label, 22) : clip(node.content);
 
   g.appendChild(rect);
   g.appendChild(ttype);
@@ -311,6 +311,31 @@ function refreshSidebar() {
 // ═══════════════════════════════════════════════════════════
 //  AI API — proxied through backend
 // ═══════════════════════════════════════════════════════════
+async function generateLabel(nodeId) {
+  const node = S.nodes[nodeId];
+  if (!node) return;
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: S.model,
+        messages: [{ role: 'user', content:
+          `2-4 words summarising the topic of this text. ONLY the words, no punctuation:\n\n${node.content.slice(0,400)}` }],
+        max_tokens: 12,
+        stream: false,
+      }),
+    });
+    if (!res.ok) return;
+    const label = (await res.json()).choices?.[0]?.message?.content?.trim();
+    if (label && S.nodes[nodeId]) {
+      S.nodes[nodeId].label = label;
+      render();
+      persist();
+    }
+  } catch {}
+}
+
 async function sendMessage(text) {
   if (!S.focusId) return;
 
@@ -405,6 +430,7 @@ async function sendMessage(text) {
   refreshSidebar();
   render();
   persist();
+  if (aiNodeId) generateLabel(aiNodeId);
 }
 
 // ═══════════════════════════════════════════════════════════
