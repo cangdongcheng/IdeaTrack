@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IdeaTrack</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────── -->
+<div id="header">
+  <h1>Idea<span>Track</span></h1>
+  <span id="topic-label">no topic loaded</span>
+  <div class="spacer"></div>
+  <button class="btn" onclick="openModelModal()">Model</button>
+  <button class="btn" onclick="openTopicsModal()">Topics</button>
+  <button class="btn primary" onclick="openTopicModal()">+ New Topic</button>
+  <button class="btn" onclick="toggleSidebar()">Panel</button>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Canvas -->
+  <div id="canvas-wrap">
+    <svg id="canvas">
+      <g id="graph-root">
+        <g id="edges-layer"></g>
+        <g id="nodes-layer"></g>
+      </g>
+    </svg>
+    <div id="hint">Scroll to zoom · Drag canvas to pan · Click node to select/focus · Drag node to reposition · Del to delete</div>
+    <div id="zoom-controls">
+      <button class="btn" onclick="doZoom(1.2)">+</button>
+      <button class="btn" onclick="resetView()">&#x2609;</button>
+      <button class="btn" onclick="doZoom(0.82)">&#x2212;</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sb-empty">
+      Click any node to read its full content.<br><br>
+      Shift+click to set your branch point<br>
+      (where your next message will attach).
+    </div>
+    <div id="sb-inner" style="display:none; flex-direction:column; height:100%;">
+      <div id="sb-header">
+        <span id="sb-badge" class="type-badge"></span>
+        <span id="sb-title" class="sb-title"></span>
+      </div>
+      <div id="sb-content"></div>
+      <div id="sb-meta"></div>
+      <div id="sb-actions" style="padding:8px 14px 10px;border-top:1px solid var(--border);flex-shrink:0;">
+        <button class="btn danger" id="sb-delete-btn" onclick="deleteSelectedNode()" style="width:100%;padding:6px;">
+          Delete node &amp; all branches
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Input bar ────────────────────────────────────────────── -->
+<div id="input-bar">
+  <div id="focus-strip">
+    <div class="focus-dot"></div>
+    <span>Branching from:&nbsp;</span>
+    <span id="focus-node-label">— select a node first —</span>
+  </div>
+  <div id="input-row">
+    <textarea id="msg-input"
+      placeholder="Ask something… (Enter sends, Shift+Enter for newline)"
+      rows="1"
+      disabled></textarea>
+    <button id="send-btn" disabled>Send</button>
+  </div>
+</div>
+
+<!-- ── Modal ────────────────────────────────────────────────── -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2 id="modal-title"></h2>
+    <p  id="modal-desc"></p>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="modal-ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
