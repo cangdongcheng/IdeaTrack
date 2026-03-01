@@ -334,15 +334,12 @@ async function sendMessage(text) {
     ...buildHistory(userNodeId),
   ];
 
+  let aiNodeId = null;
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: S.model,
-        messages,
-        max_tokens: 1024,
-      }),
+      body: JSON.stringify({ model: S.model, messages, max_tokens: 1024, stream: true }),
     });
 
     if (!res.ok) {
@@ -350,23 +347,62 @@ async function sendMessage(text) {
       throw new Error(err.error || `HTTP ${res.status}`);
     }
 
-    const data    = await res.json();
-    const aiText  = data.choices[0].message.content;
-    const aiNode  = addNode(userNodeId, 'assistant', aiText);
-    layout();
-    setFocus(aiNode);
-    selectNode(aiNode);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', aiText = '', renderPending = false;
+
+    const scheduleRender = () => {
+      if (renderPending) return;
+      renderPending = true;
+      requestAnimationFrame(() => { renderPending = false; render(); });
+    };
+
+    outer: while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') break outer;
+        try {
+          const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+          if (delta) {
+            aiText += delta;
+            if (!aiNodeId) {
+              aiNodeId = addNode(userNodeId, 'assistant', aiText);
+              S.focusId = aiNodeId;
+              S.selectedId = aiNodeId;
+              refreshFocusStrip();
+              layout();
+              render();
+            } else {
+              S.nodes[aiNodeId].content = aiText;
+              scheduleRender();
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (!aiNodeId) {
+      aiNodeId = addNode(userNodeId, 'assistant', '[No response]');
+      layout();
+    }
 
   } catch (e) {
-    const errNode = addNode(userNodeId, 'assistant', `[Error] ${e.message}`);
-    layout();
-    setFocus(errNode);
-    selectNode(errNode);
+    const errId = addNode(userNodeId, 'assistant', `[Error] ${e.message}`);
+    if (!aiNodeId) { aiNodeId = errId; layout(); }
+    S.focusId = aiNodeId;
+    S.selectedId = aiNodeId;
     console.error(e);
   }
 
   S.loading = false;
   refreshFocusStrip();
+  refreshSidebar();
   render();
   persist();
 }
@@ -707,6 +743,74 @@ function buildTopicsBodyHtml() {
 function openTopicsModal() {
   openModal('Topics', 'Your saved conversations', buildTopicsBodyHtml(), 'Close', closeModal);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  Center on focus
+// ═══════════════════════════════════════════════════════════
+function centerOnFocus() {
+  if (!S.focusId || !S.nodes[S.focusId]) return;
+  const node = S.nodes[S.focusId];
+  S.panX = -node.x * S.zoom;
+  S.panY = -node.y * S.zoom;
+  applyTransform();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Export current branch as Markdown
+// ═══════════════════════════════════════════════════════════
+function exportBranch() {
+  const path = [];
+  let cur = S.focusId || S.rootId;
+  while (cur && S.nodes[cur]) { path.unshift(S.nodes[cur]); cur = S.nodes[cur].parentId; }
+
+  let md = `# ${S.topicName}\n\n`;
+  for (const node of path) {
+    if (node.type === 'root') continue;
+    md += node.type === 'user' ? `**You**\n\n` : `**AI**\n\n`;
+    md += `${node.content}\n\n---\n\n`;
+  }
+
+  const slug = S.topicName.replace(/[^a-z0-9]+/gi, '_').toLowerCase() || 'export';
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([md], { type: 'text/markdown' })),
+    download: `${slug}.md`,
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Rename topic (double-click label)
+// ═══════════════════════════════════════════════════════════
+document.getElementById('topic-label').addEventListener('dblclick', () => {
+  const label = document.getElementById('topic-label');
+  const prev  = S.topicName;
+  label.contentEditable = 'true';
+  label.focus();
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(label);
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const finish = () => {
+    label.contentEditable = 'false';
+    label.removeEventListener('keydown', onKey);
+    const newName = label.textContent.trim() || prev;
+    label.textContent = newName;
+    if (newName !== prev) {
+      S.topicName = newName;
+      if (S.rootId && S.nodes[S.rootId]) S.nodes[S.rootId].content = newName;
+      layout(); render(); persist();
+    }
+  };
+  const onKey = e => {
+    if (e.key === 'Enter')  { e.preventDefault(); label.blur(); }
+    if (e.key === 'Escape') { label.textContent = prev; label.blur(); }
+  };
+  label.addEventListener('keydown', onKey);
+  label.addEventListener('blur', finish, { once: true });
+});
 
 // ═══════════════════════════════════════════════════════════
 //  Boot

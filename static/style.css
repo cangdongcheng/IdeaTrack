@@ -57,6 +57,15 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: default;
+}
+#topic-label[contenteditable="true"] {
+  outline: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  cursor: text;
+  color: var(--text);
+  font-style: normal;
 }
 
 .spacer { flex: 1; }
